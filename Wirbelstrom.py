@@ -29,6 +29,9 @@ class Gui():
         self.menu.add_cascade(label="Datei",menu = self.filemenu)
         self.root.config(menu=self.menu)
 
+        self.button_connect =        Button(root, text="Connect", command=self.connect)
+        self.button_disconnect =     Button(root, text="Disconnect", command=self.disconnect, state=DISABLED)
+        
         self.entry_t_time =          Entry(root)
         self.entry_t_lever =         Entry(root)
         self.entry_t_lever_delay =   Entry(root)
@@ -50,13 +53,16 @@ class Gui():
         self.label_part =            Label(root, text="part")
         self.label_part_bit =        Label(root, text="part_bit")
         self.label_shift =           Label(root, text="Lever-FIFO")
-        self.label_com_ok =          Label(root, text="----", relief = GROOVE, fg = "red")
+        self.label_com_ok =          Label(root, text="False", relief = GROOVE, fg = "red")
         self.label_com =             Label(root, text="COM-Status")
 
         self.button_send =           Button(root, text="Send", fg="blue",command=lambda: self.get_gui_command(0,0), width = 6)
         self.label_counts =          Label(root, text="1", font=("Calibri",30), relief = GROOVE, width = 6)
         self.label_input =           Label(root, text="Keine Daten bis jetzt", font=("Calibri",20), relief = GROOVE, width = 30)
         self.label_input_shift =     Label(root, text="--------", font=("Calibri",30), relief = GROOVE)
+
+        self.button_connect.place        (x= 100, y=10)
+        self.button_disconnect.place     (x= 150, y=10)
 
         self.label_t_plus_time.place     (x= 100, y = 50)
         self.label_lever_long_time.place (x= 100, y = 100)
@@ -81,9 +87,8 @@ class Gui():
         self.label_input_shift.place    (x = 550, y = 400)
 
         self.uart = Uart()
-        self.status_com = self.uart.open_uart("COM4",9600)
-        self.uart.start_thread_reading(self.status_com)       
-        self.get_uart_data()
+        self.uart.attach(Uart.EVT_CONNECTION_STATUS, self.connection_status_changed)
+        self.uart.attach(Uart.EVT_DATA, self.data_received)
         
     def cleanup(self):
         print("Clean-Up")
@@ -105,7 +110,29 @@ class Gui():
             self.loadet_data = self.loaded_file.read()
             self.loaded_file.close()
             print(self.loadet_data)
-        
+
+    def connect(self):
+        self.uart.open_uart("COM4",9600)
+
+    def disconnect(self):
+        self.uart.close()
+
+    def connection_status_changed(self, status):
+        self.label_com_ok.configure(text = str(status))
+        if status:
+            self.button_connect.configure(state = DISABLED)
+            self.button_disconnect.configure(state = NORMAL)
+        else:
+            self.button_connect.configure(state = NORMAL)
+            self.button_disconnect.configure(state = DISABLED)
+
+    def data_received(self, data):
+        print("Data-In: "+ str(data))
+        if len(data) > 7:
+            self.label_input.configure(text = data[1:-1])
+            self.label_counts.configure(text = str(data[4]))
+            self.label_input_shift.configure(text = '{0:08b}'.format(int(data[7])))
+
     def get_gui_command(self,x,y):
         
         data = ""
@@ -152,19 +179,6 @@ class Gui():
             text = "0"
             tkMessageBox.showerror(title="Error",message="Zahl nur 1 - 254 ",parent=self.root)
         return (text)
-
-    def get_uart_data(self):
-        data = self.uart.get_new_commands()
-        print("Data-In: "+str(data))
-        if len(data) > 7:
-            print("Data-In: "+str(data))
-            self.label_input.configure(text = data[1:-1])
-            self.label_counts.configure(text = str(data[4]))
-            self.label_input_shift.configure(text = '{0:08b}'.format(int(data[7])))
-
-        self.label_com_ok.configure(text = str(self.status_com))            #Status der COM aun GUI zeigen
-            
-        self.root.after(1000,self.get_uart_data)
 
 if __name__ == "__main__":
 
