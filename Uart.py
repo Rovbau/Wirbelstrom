@@ -12,6 +12,7 @@ class Uart():
     def __init__(self):
         self.connected = False
         self.observers = {}
+        self.readingThreadRunning = False
 
     def attach(self, evt, observer):
         if not evt in self.observers:
@@ -82,7 +83,7 @@ class Uart():
             self.setConnectionStatus(False)
             print("Close COM")
         except Exception as e:
-            print("Could not close COM" + str(e))
+            print("Could not close COM " + str(e))
      
 if __name__ == "__main__":
    

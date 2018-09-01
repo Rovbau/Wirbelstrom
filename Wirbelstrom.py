@@ -13,6 +13,7 @@ from threading import *
 import atexit
 import time
 import logging
+import pickle
 
 data = ""
 
@@ -62,7 +63,7 @@ class Gui():
         self.label_input_shift =     Label(root, text="--------", font=("Calibri",30), relief = GROOVE)
 
         self.button_connect.place        (x= 100, y=10)
-        self.button_disconnect.place     (x= 150, y=10)
+        self.button_disconnect.place     (x= 200, y=10)
 
         self.label_t_plus_time.place     (x= 100, y = 50)
         self.label_lever_long_time.place (x= 100, y = 100)
@@ -91,27 +92,49 @@ class Gui():
         self.uart.attach(Uart.EVT_DATA, self.data_received)
         
     def cleanup(self):
+        """Close UART and Close GUI"""
         print("Clean-Up")
         self.uart.close()
         self.root.destroy()
 
     def store_setting(self):
-        print("sichern")
-        self.stored_file = filedialog.asksaveasfile(mode='w')
+        """Get Str vom Entry's and Pickle to file"""
+        self.stored_file = filedialog.asksaveasfile(filetypes = (("txt files","*.txt"),("all files","*.*")),                                                    defaultextension = ".txt")
         if self.stored_file:
-            print("Write data...")
-            self.stored_file.write("hallo")
+            print("Write data...")       
+            data = [self.entry_t_time.get(),
+                    self.entry_t_lever.get(),
+                    self.entry_t_lever_delay.get(),
+                    self.entry_t_count.get(),        
+                    self.entry_part.get(),
+                    self.entry_part_bit.get()]
+            
+            pickle.dump(data, self.stored_file)
             self.stored_file.close()
 
     def load_setting(self):
-        print("laden...")
-        self.loaded_file = filedialog.askopenfile()
+        """Get data from file and update Entry's"""
+        self.loaded_file = filedialog.askopenfile(filetypes = (("txt files","*.txt"),("all files","*.*")))
         if self.loaded_file:
-            self.loadet_data = self.loaded_file.read()
-            self.loaded_file.close()
-            print(self.loadet_data)
+            print("Loading...")
+            data = pickle.load(self.loaded_file)
+
+            self.entry_t_time.delete(0, END)
+            self.entry_t_time.insert(0, data[0])
+            self.entry_t_lever.delete(0, END)
+            self.entry_t_lever.insert(0,data[1])
+            self.entry_t_lever_delay.delete(0, END)
+            self.entry_t_lever_delay.insert(0, data[2])
+            self.entry_t_count.delete(0, END)
+            self.entry_t_count.insert(0, data[3])
+            self.entry_part.delete(0, END)
+            self.entry_part.insert(0, data[4])
+            self.entry_part_bit.delete(0, END)
+            self.entry_part_bit.insert(0, data[5])
+            
 
     def connect(self):
+        """Connect to COM Port"""
         self.uart.open_uart("COM4",9600)
 
     def disconnect(self):
@@ -134,6 +157,7 @@ class Gui():
             self.label_input_shift.configure(text = '{0:08b}'.format(int(data[7])))
 
     def get_gui_command(self,x,y):
+        """Read Str vom Entry's and send data to COM"""
         
         data = ""
         data = self.text_to_char(255)    #Set commands[arr] in PIC to zero
@@ -166,12 +190,12 @@ class Gui():
         self.uart.send_commands(data)        #Send data to COM
             
     def text_to_char(self, data):
-        """Convert a str([Number] to char"""
+        """Convert a str[Number] to char"""
         char_to_send = chr(int(data))
         return(char_to_send)
 
     def check_user_input(self, text):
-        "Checks text for range = 1-254 Shows Tk.MessageBox if Not"""
+        "Checks text for range = 1-254 shows MessageBox if Not"""
         if text.isdigit() == False:
             text = "0"
             tkMessageBox.showerror(title="Error",message="Keine gültige Zahl",parent=self.root)
@@ -196,10 +220,5 @@ if __name__ == "__main__":
     except:
         logging.exception("Main Failed")
         print("Fatal Error, Closing App")
-    
-
-##
-
-
 
 
