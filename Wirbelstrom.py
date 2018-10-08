@@ -47,11 +47,11 @@ class Gui():
         self.entry_part.insert(0,"1")
         self.entry_part_bit.insert(0,"1")
 
-        self.label_t_plus_time =     Label(root, text="t_plus_time")
-        self.label_lever_long_time = Label(root, text="lever_l_time")
-        self.label_t_lever_delay =   Label(root, text="xxx")
+        self.label_t_plus_time =     Label(root, text="B_plus_time")
+        self.label_lever_long_time = Label(root, text="Lever_ON_time")
+        self.label_t_lever_delay =   Label(root, text="Lever_Delay_time")
         self.label_t_count =         Label(root, text="count")
-        self.label_part =            Label(root, text="part")
+        self.label_part =            Label(root, text="Parts")
         self.label_part_bit =        Label(root, text="part_bit")
         self.label_shift =           Label(root, text="Lever-FIFO")
         self.label_com_ok =          Label(root, text="False", relief = GROOVE, fg = "red")
@@ -156,6 +156,16 @@ class Gui():
             self.label_counts.configure(text = str(data[4]))
             self.label_input_shift.configure(text = '{0:08b}'.format(int(data[7])))
 
+    def get_part(self, text):
+        """Read Str from Parts-Entry and generate Byte+Bit for uP / Part maximal 100"""
+        if int(text) > 100:
+            tkMessageBox.showerror(title="Error",message="Parts nur 1-100",parent=self.root)           
+            return(str(254), str(254))
+        else:
+            part_byte = int(text) / 8
+            part_bit  = int(text) % 8           
+            return(str(part_byte), str(part_bit))
+        
     def get_gui_command(self,x,y):
         """Read Str vom Entry's and send data to COM"""
         
@@ -178,16 +188,17 @@ class Gui():
         text = self.check_user_input(text)
         data = data + self.text_to_char(text)
         
-        text = self.entry_part.get()
+        text = self.entry_part.get()                #Part anzahl in byte und bit
         text = self.check_user_input(text)
-        data = data + self.text_to_char(text)
+        part_byte, part_bit = self.get_part(text)  
+        data = data + self.text_to_char(part_byte)
+        data = data + self.text_to_char(part_bit)
 
-        text = self.entry_part_bit.get()
-        text = self.check_user_input(text)
-        data = data + self.text_to_char(text)
-        
-        print("Data-Out: " +str(data))
-        self.uart.send_commands(data)        #Send data to COM
+        if chr(254) not in data:                  #Send when all inputs "okay" > 0
+            print("Data-Out: " +str(data))
+            self.uart.send_commands(data)        #Send data to COM
+        else:
+            print("Fehler in User_Inputs")
             
     def text_to_char(self, data):
         """Convert a str[Number] to char"""
@@ -197,10 +208,10 @@ class Gui():
     def check_user_input(self, text):
         "Checks text for range = 1-254 shows MessageBox if Not"""
         if text.isdigit() == False:
-            text = "0"
+            text = "254"
             tkMessageBox.showerror(title="Error",message="Keine gültige Zahl",parent=self.root)
         if  int(text) < 0 or int(text) > 254:
-            text = "0"
+            text = "254"
             tkMessageBox.showerror(title="Error",message="Zahl nur 1 - 254 ",parent=self.root)
         return (text)
 
