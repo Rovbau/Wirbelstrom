@@ -21,7 +21,7 @@ class Gui():
     def __init__(self, root):
         self.root = root
         self.root.title ("Wirbelstrom-Control")           #Titel de Fensters
-        self.root.geometry("1000x700+0+0")
+        self.root.geometry("1100x700+0+0")
 
         self.menu =     Menu(root)
         self.filemenu = Menu(self.menu)
@@ -30,8 +30,8 @@ class Gui():
         self.menu.add_cascade(label="Datei",menu = self.filemenu)
         self.root.config(menu=self.menu)
 
-        self.button_connect =        Button(root, text="Connect", command=self.connect)
-        self.button_disconnect =     Button(root, text="Disconnect", command=self.disconnect, state=DISABLED)
+        self.button_connect =        Button(root, text="Connect",    width = 16, command=self.connect)
+        self.button_disconnect =     Button(root, text="Disconnect", width = 16, command=self.disconnect, state=DISABLED)
         
         self.entry_t_time =          Entry(root)
         self.entry_t_lever =         Entry(root)
@@ -52,41 +52,59 @@ class Gui():
         self.label_t_lever_delay =   Label(root, text="Lever_Delay_time")
         self.label_t_count =         Label(root, text="count")
         self.label_part =            Label(root, text="Parts")
-        self.label_part_bit =        Label(root, text="part_bit")
-        self.label_shift =           Label(root, text="Lever-FIFO")
         self.label_com_ok =          Label(root, text="False", relief = GROOVE, fg = "red")
-        self.label_com =             Label(root, text="COM-Status")
 
-        self.button_send =           Button(root, text="Send", fg="blue",command=lambda: self.get_gui_command(0,0), width = 6)
-        self.label_counts =          Label(root, text="1", font=("Calibri",30), relief = GROOVE, width = 6)
-        self.label_input =           Label(root, text="Keine Daten bis jetzt", font=("Calibri",20), relief = GROOVE, width = 30)
-        self.label_input_shift =     Label(root, text="--------", font=("Calibri",30), relief = GROOVE)
+        self.label_com =             Label(root, text="SCHNITTSTELLEN Status")
+        self.label_dev_ok =          Label(root, text="ELOTEST Bereit")  
+        self.label_dev_ready =       Label(root, text="ELOTEST Fehlerfrei")
+        self.label_config_ok =       Label(root, text="CONFIG erhalten")
 
-        self.button_connect.place        (x= 100, y=10)
-        self.button_disconnect.place     (x= 200, y=10)
+        self.label_com_status =          Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_def_status =          Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_dev_ready_status =    Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_config_status =       Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
 
-        self.label_t_plus_time.place     (x= 100, y = 50)
-        self.label_lever_long_time.place (x= 100, y = 100)
-        self.label_t_lever_delay.place   (x= 100, y = 150)
-        self.label_t_count.place         (x= 100, y = 200)
-        self.label_part.place            (x= 100, y = 250)
-        self.label_part_bit.place        (x= 100, y = 300)
-        self.label_com_ok.place          (x= 550, y = 300)
-        self.label_com.place             (x= 450, y = 300)
+        self.label_shift =           Label(root, text="Lever-FIFO")
+        self.label_count =           Label(root, text="Counts")
 
-        self.entry_t_time.place         (x= 250, y = 50)
-        self.entry_t_lever.place        (x= 250, y = 100)
-        self.entry_t_lever_delay.place  (x= 250, y = 150)
-        self.entry_t_count.place        (x= 250, y = 200)
-        self.entry_part.place           (x= 250, y = 250)
-        self.entry_part_bit.place       (x= 250, y = 300)
+        self.button_send =           Button(root, text="Send", fg="blue",command=lambda: self.get_gui_command(0,0), width = 38)
+        self.label_counts =          Label(root, text="1", font=("Calibri",20), relief = GROOVE, width = 6)
+        self.label_input =           Label(root, text="Keine Daten bis jetzt", relief = GROOVE, width = 38)
+        self.label_input_shift =     Label(root, text="00000000", font=("Calibri",20), relief = GROOVE)
+
+        self.button_connect.place        (x= 100, y=50)
+        self.button_disconnect.place     (x= 250, y=50)
+
+        self.label_t_plus_time.place     (x= 100, y = 100)
+        self.label_lever_long_time.place (x= 100, y = 150)
+        self.label_t_lever_delay.place   (x= 100, y = 200)
+        self.label_t_count.place         (x= 100, y = 250)
+        self.label_part.place            (x= 100, y = 300)
+
+        self.label_com.place            (x= 650, y = 100)  
+        self.label_dev_ok.place         (x= 650, y = 150)    
+        self.label_dev_ready.place      (x= 650, y = 200)  
+        self.label_config_ok.place      (x= 650, y = 250)
+        
+        self.label_com_status.place         (x= 850, y = 100)
+        self.label_def_status.place         (x= 850, y = 150)
+        self.label_dev_ready_status.place   (x= 850, y = 200)
+        self.label_config_status.place      (x= 850, y = 250)
+        
+        self.entry_t_time.place         (x= 250, y = 100)
+        self.entry_t_lever.place        (x= 250, y = 150)
+        self.entry_t_lever_delay.place  (x= 250, y = 200)
+        self.entry_t_count.place        (x= 250, y = 250)
+        self.entry_part.place           (x= 250, y = 300)
 
         self.button_send.place          (x = 100, y = 350)
-        self.label_counts.place         (x = 100, y = 400)
-        self.label_input.place          (x = 100, y = 500)
-        self.label_shift.place          (x = 400, y = 400)
-        self.label_input_shift.place    (x = 550, y = 400)
-
+        
+        self.label_count.place          (x = 650, y = 400)
+        self.label_counts.place         (x = 850, y = 400)
+        self.label_shift.place          (x = 650, y = 450)
+        self.label_input_shift.place    (x = 850, y = 450)
+        self.label_input.place          (x = 100, y = 400)
+        
         self.uart = Uart()
         self.uart.attach(Uart.EVT_CONNECTION_STATUS, self.connection_status_changed)
         self.uart.attach(Uart.EVT_DATA, self.data_received)
@@ -117,20 +135,23 @@ class Gui():
         self.loaded_file = filedialog.askopenfile(filetypes = (("txt files","*.txt"),("all files","*.*")))
         if self.loaded_file:
             print("Loading...")
-            data = pickle.load(self.loaded_file)
+            try:                
+                data = pickle.load(self.loaded_file)
 
-            self.entry_t_time.delete(0, END)
-            self.entry_t_time.insert(0, data[0])
-            self.entry_t_lever.delete(0, END)
-            self.entry_t_lever.insert(0,data[1])
-            self.entry_t_lever_delay.delete(0, END)
-            self.entry_t_lever_delay.insert(0, data[2])
-            self.entry_t_count.delete(0, END)
-            self.entry_t_count.insert(0, data[3])
-            self.entry_part.delete(0, END)
-            self.entry_part.insert(0, data[4])
-            self.entry_part_bit.delete(0, END)
-            self.entry_part_bit.insert(0, data[5])
+                self.entry_t_time.delete(0, END)
+                self.entry_t_time.insert(0, data[0])
+                self.entry_t_lever.delete(0, END)
+                self.entry_t_lever.insert(0,data[1])
+                self.entry_t_lever_delay.delete(0, END)
+                self.entry_t_lever_delay.insert(0, data[2])
+                self.entry_t_count.delete(0, END)
+                self.entry_t_count.insert(0, data[3])
+                self.entry_part.delete(0, END)
+                self.entry_part.insert(0, data[4])
+                self.entry_part_bit.delete(0, END)
+                self.entry_part_bit.insert(0, data[5])
+            except:
+                print("Fehler beim Laden der Daten")
             
 
     def connect(self):
@@ -141,13 +162,15 @@ class Gui():
         self.uart.close()
 
     def connection_status_changed(self, status):
-        self.label_com_ok.configure(text = str(status))
+        """Set Connect/Disconect Button State"""
         if status:
             self.button_connect.configure(state = DISABLED)
             self.button_disconnect.configure(state = NORMAL)
+            self.label_com_status.configure(text = str(status), fg = "darkgreen")
         else:
             self.button_connect.configure(state = NORMAL)
             self.button_disconnect.configure(state = DISABLED)
+            self.label_com_status.configure(text = str(status), fg = "red")
 
     def data_received(self, data):
         print("Data-In: "+ str(data))
