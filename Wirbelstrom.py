@@ -58,19 +58,21 @@ class Gui():
         self.label_dev_ok =          Label(root, text="ELOTEST Bereit")  
         self.label_dev_ready =       Label(root, text="ELOTEST Fehlerfrei")
         self.label_config_ok =       Label(root, text="CONFIG erhalten")
+        self.label_picfault_ok =     Label(root, text="CONTROLLER Fehlerfrei")
 
         self.label_com_status =          Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
-        self.label_def_status =          Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
-        self.label_dev_ready_status =    Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_dev_status =          Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_dev_fault_status =    Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
         self.label_config_status =       Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
+        self.label_picfault_status =     Label(root, text="False", relief = GROOVE, fg = "red", width = 6)
 
         self.label_shift =           Label(root, text="Lever-FIFO")
         self.label_count =           Label(root, text="Counts")
 
-        self.button_send =           Button(root, text="Send", fg="blue",command=lambda: self.get_gui_command(0,0), width = 38)
-        self.label_counts =          Label(root, text="1", font=("Calibri",20), relief = GROOVE, width = 6)
+        self.button_send =           Button(root, text="Send Config", fg="blue",command=lambda: self.get_gui_command(0,0), width = 38)
+        self.label_counts =          Label(root, text="00", font=("Calibri",20), relief = GROOVE, width = 10)
         self.label_input =           Label(root, text="Keine Daten bis jetzt", relief = GROOVE, width = 38)
-        self.label_input_shift =     Label(root, text="00000000", font=("Calibri",20), relief = GROOVE)
+        self.label_input_shift =     Label(root, text="-000000-", font=("Calibri",20), relief = GROOVE, width = 10)
 
         self.button_connect.place        (x= 100, y=50)
         self.button_disconnect.place     (x= 250, y=50)
@@ -85,11 +87,13 @@ class Gui():
         self.label_dev_ok.place         (x= 650, y = 150)    
         self.label_dev_ready.place      (x= 650, y = 200)  
         self.label_config_ok.place      (x= 650, y = 250)
+        self.label_picfault_ok.place    (x= 650, y = 300)
         
         self.label_com_status.place         (x= 850, y = 100)
-        self.label_def_status.place         (x= 850, y = 150)
-        self.label_dev_ready_status.place   (x= 850, y = 200)
+        self.label_dev_status.place         (x= 850, y = 150)
+        self.label_dev_fault_status.place   (x= 850, y = 200)
         self.label_config_status.place      (x= 850, y = 250)
+        self.label_picfault_status.place    (x= 850, y = 300)
         
         self.entry_t_time.place         (x= 250, y = 100)
         self.entry_t_lever.place        (x= 250, y = 150)
@@ -173,11 +177,43 @@ class Gui():
             self.label_com_status.configure(text = str(status), fg = "red")
 
     def data_received(self, data):
+        
         print("Data-In: "+ str(data))
-        if len(data) > 7:
-            self.label_input.configure(text = data[1:-1])
-            self.label_counts.configure(text = str(data[4]))
-            self.label_input_shift.configure(text = '{0:08b}'.format(int(data[7])))
+        if len(data) > 7:            
+            self.label_input.configure(text = data[1:-1])                               #Statustext Serial input
+
+            if data[8] & 0b00000001:                                                    #Status Dev_ready
+                self.label_dev_status.configure( text = "False", fg= "red")
+            else:
+                self.label_dev_status.configure( text = "True", fg= "darkgreen")
+                
+            if data[8] & 0b00000010:                                                    #Status Dev_fault
+                self.label_dev_fault_status.configure( text = "False", fg= "red")
+            else:
+                self.label_dev_fault_status.configure( text = "True", fg= "darkgreen")
+
+            if data[8] & 0b00000100:                                                    #Status Config_done
+                self.label_config_status.configure( text = "False", fg= "red")
+            else:
+                self.label_config_status.configure( text = "True", fg= "darkgreen")
+
+            if data[8] & 0b00011000:                                                    #Status uP fail
+                self.label_picfault_status.configure( text = "False", fg= "red")
+            else:
+                self.label_picfault_status.configure( text = "True", fg= "darkgreen")
+
+            actual_counts = int(data[4])                                                #Prevent Count from Overflow            
+            if actual_counts < self.old_counts:                                         #Update Count label
+                actual_counts = actual_counts + self.old_counts
+                self.old_counts = actual_counts
+                self.label_counts.configure(text = str(actual_counts))
+            else:
+                self.old_counts = actual_counts
+                self.label_counts.configure(text = str(actual_counts))
+
+            fifo_text = '{0:08b}'.format(int(data[7]))                                  #Update FIFO (reversed L-R)
+            fifo_reversed = ''.join(reversed(fifo_text))
+            self.label_input_shift.configure(text = fifo_reversed)
 
     def get_part(self, text):
         """Read Str from Parts-Entry and generate Byte+Bit for uP / Part maximal 100"""
@@ -193,7 +229,7 @@ class Gui():
         """Read Str vom Entry's and send data to COM"""
         
         data = ""
-        data = self.text_to_char(255)    #Set commands[arr] in PIC to zero
+        data = self.text_to_char(255)               #Set commands[arr] in PIC to zero
         
         text = self.entry_t_time.get()
         text = self.check_user_input(text)
@@ -217,9 +253,11 @@ class Gui():
         data = data + self.text_to_char(part_byte)
         data = data + self.text_to_char(part_bit)
 
-        if chr(254) not in data:                  #Send when all inputs "okay" > 0
-            print("Data-Out: " +str(data))
-            self.uart.send_commands(data)        #Send data to COM
+        data = data + self.text_to_char("0")        #Send error_status Null -> all OK
+
+        if chr(254) not in data:                    #Send when all inputs "okay" > 0
+            print("Data-Out: " +str(data))          #Send data to COM
+            self.uart.send_commands(data)           
         else:
             print("Fehler in User_Inputs")
             
@@ -240,19 +278,24 @@ class Gui():
 
 if __name__ == "__main__":
 
-    logging.basicConfig(filename='Err_Log_wirbelstrom.log',
-                        format='%(asctime)s %(levelname)-8s %(message)s',
-                        level=logging.ERROR,
-                        datefmt='%Y-%m-%d %H:%M:%S')
+    root=Tk()
+    gui = Gui(root)
+    atexit.register(gui.cleanup)
+    root.mainloop()
 
-    try:    
-        root=Tk()
-        gui = Gui(root)
-        atexit.register(gui.cleanup)    
-        root.protocol("WM_DELETE_WINDOW", gui.cleanup)            
-        root.mainloop()
-    except:
-        logging.exception("Main Failed")
-        print("Fatal Error, Closing App")
+####    logging.basicConfig(filename='Err_Log_wirbelstrom.log',
+####                        format='%(asctime)s %(levelname)-8s %(message)s',
+####                        level=logging.ERROR,
+####                        datefmt='%Y-%m-%d %H:%M:%S')
+##
+##    try:    
+##        root=Tk()
+##        gui = Gui(root)
+##        atexit.register(gui.cleanup)    
+##        root.protocol("WM_DELETE_WINDOW", gui.cleanup)            
+##        root.mainloop()
+##    except:
+##        logging.exception("Main Failed")
+##        print("Fatal Error, Closing App")
 
 
