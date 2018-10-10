@@ -14,6 +14,7 @@ import atexit
 import time
 import logging
 import pickle
+import sys
 
 data = ""
 
@@ -108,7 +109,8 @@ class Gui():
         self.label_shift.place          (x = 650, y = 450)
         self.label_input_shift.place    (x = 850, y = 450)
         self.label_input.place          (x = 100, y = 400)
-        
+
+        self.old_counts = 0
         self.uart = Uart()
         self.uart.attach(Uart.EVT_CONNECTION_STATUS, self.connection_status_changed)
         self.uart.attach(Uart.EVT_DATA, self.data_received)
@@ -182,22 +184,22 @@ class Gui():
         if len(data) > 7:            
             self.label_input.configure(text = data[1:-1])                               #Statustext Serial input
 
-            if data[8] & 0b00000001:                                                    #Status Dev_ready
+            if int(data[8]) & 0b00000001:                                                    #Status Dev_ready
                 self.label_dev_status.configure( text = "False", fg= "red")
             else:
                 self.label_dev_status.configure( text = "True", fg= "darkgreen")
                 
-            if data[8] & 0b00000010:                                                    #Status Dev_fault
+            if int(data[8])  & 0b00000010:                                                    #Status Dev_fault
                 self.label_dev_fault_status.configure( text = "False", fg= "red")
             else:
                 self.label_dev_fault_status.configure( text = "True", fg= "darkgreen")
 
-            if data[8] & 0b00000100:                                                    #Status Config_done
+            if int(data[8])  & 0b00000100:                                                    #Status Config_done
                 self.label_config_status.configure( text = "False", fg= "red")
             else:
                 self.label_config_status.configure( text = "True", fg= "darkgreen")
 
-            if data[8] & 0b00011000:                                                    #Status uP fail
+            if int(data[8])  & 0b00011000:                                                    #Status uP fail
                 self.label_picfault_status.configure( text = "False", fg= "red")
             else:
                 self.label_picfault_status.configure( text = "True", fg= "darkgreen")

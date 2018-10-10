@@ -2,6 +2,7 @@ import serial
 import time
 from threading import *
 import atexit
+import sys
 
 
 class Uart():
@@ -70,6 +71,7 @@ class Uart():
                     self._notifyObservers(Uart.EVT_DATA, data[:])
             except:
                 self.setConnectionStatus(False)
+                print(sys.exc_info()[0])
             time.sleep(0.5)
         self.readingThreadRunning = False
 

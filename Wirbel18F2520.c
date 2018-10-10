@@ -28,8 +28,8 @@
 #define InSB    PORTAbits.RA4
 #define InSA    PORTAbits.RA5
 
-#define OutLeverR   LATBbits.LATB0 // OHNE FUNKTION PB0 nicht funktionst
-#define OutSteuerS  LATBbits.LATB1
+#define OutSteuerS  LATBbits.LATB0 
+#define OutLeverR   LATBbits.LATB1 
 #define OutHupe     LATBbits.LATB2
 #define OutAlarm    LATBbits.LATB3
 #define OutLeverLed LATBbits.LATB4
@@ -117,17 +117,17 @@ char part_bit;
 char aktual;
 char lever_on, lever_long_flag, lever_relais_flag;
 char position;
-char commands[7] = {0, 0, 0, 0, 0, 0, 0};
+char commands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 char t_plus_time;
 char lever1_long_time;
+char lever_delay_time;
 char lever_allready_set;
-char dumy1, dumy2, dumy3;
+char dumy1, dumy3;
 char new_data_ready;
 char Txdata[6];
 char daten;
 char send_actual_byte;
-
-
+char error_status;
 
 
 void init(void) {
@@ -154,6 +154,12 @@ T1CON = 0b000001;
 }
 
 void wait_timer1(void) {
+    if (PIR1bits.TMR1IF == 1) {
+        error_status = error_status | 0b00010000; // Set Error_bit 4 timer_overflow
+    } else {
+        error_status = error_status & ~0b00010000; // Clear Error_bit 4 timer_overflow
+    }
+            
     while (PIR1bits.TMR1IF == 0) {
     }
     TMR1H = 220;
@@ -166,8 +172,8 @@ void init_serial(void) {
     TXSTA = 0b00100100; //  TX, 8bit,FRame e OverRun errors, high_speed
     RCSTA = 0b10010110; // USART,8bit,FRame e OverRun errors
     RCSTAbits.CREN = 1; // Receiver ON
-    TRISBbits.TRISB1 = 1; // TX und SX auf Input (beide INPUT!)
-    TRISBbits.TRISB2 = 1;
+    TRISCbits.TRISC6 = 1; // TX und SX auf Input (beide INPUT!)
+    TRISCbits.TRISC7 = 1;
     PIE1bits.RCIE = 1; // USART Interupt EIN
     PIR1 = 0;
     INTCONbits.PEIE = 1;
@@ -210,26 +216,23 @@ void __interrupt () my_isr_routine (void)  // In t e r r u p t r o u t i n e
         new_data = RCREG; // Daten  lesen
 
         if (new_data == 255) {
-            OutAlarm = 1;
             position = 0; //Reset DataCounter to "0" 
-        } else {
-            OutAlarm = 0;
-        }
+        } 
 
         commands[position] = new_data; //new SerialByte to commands array
         position++;
 
-        if (position == 7) {
+        if (position == 8) {
             position = 0;
             new_data_ready = 1; //Read anzahl bytes then set new_data_ready flag
         }
 
         if (FERR) {
-            OutAlarm = 1;
+            error_status = error_status | 0b00001000; // Set error_bit 3
         }
 
         if (OERR) {
-            OutAlarm = 1;
+            error_status = error_status | 0b00001000; // Set error_bit 3
             RCSTAbits.CREN = 0; // CREN On -> OFF -> ON Clears Errors USART
             RCSTAbits.CREN = 1;
         }
@@ -254,7 +257,7 @@ void send_command(void) {
             int_to_str(lever1_long_time);
             break;
         case 4:
-            int_to_str(dumy2);
+            int_to_str(lever_delay_time);
             break;
         case 5:
             int_to_str(count);
@@ -269,29 +272,19 @@ void send_command(void) {
             int_to_str(shift_data[0]); //(shift_data[0]);
             break;
         case 9:
+            int_to_str(error_status);
+            break;            
+        case 10:
             send_serial(10); //Send NEWLINE
             send_serial(13);
             break;
-        case 10:
+        case 11:
             send_actual_byte = 0;
             break;
         default:
             send_actual_byte = 0;
          
     }
-    
-    
-    
-//    int_to_str(255); // Send Startbyte
-//    int_to_str(t_plus_time);
-//    int_to_str(lever1_long_time);
-//    int_to_str(dumy2);
-//    int_to_str(count);
-//    int_to_str(part);
-//    int_to_str(part_bit);
-//    int_to_str(shift_data[0]); //(shift_data[0]);
-//    send_serial(10); //Send NEWLINE
-//    send_serial(13);
 }
 
 void read_command(void) {
@@ -299,11 +292,13 @@ void read_command(void) {
         dumy1 = commands[0];
         t_plus_time = commands[1];
         lever1_long_time = commands[2]; //Scommands[2];
-        dumy2 = commands[3];
+        lever_delay_time = commands[3];
         count = commands[4];
         part = commands[5];
         part_bit = commands[6];
+        dumy3 = commands[7];
         new_data_ready = 0;
+        error_status = error_status & ~0b00000100; // Clear Error_bit 2 Config_stored 
     }
 
 }
@@ -396,7 +391,6 @@ void show_sonden(void) {
 
 }
 
-
 void lever_output(void) {
     if (((1 << part_bit) & shift_data[part]) != 0) { //Check Schiftregister [Byte = part][Bit = part_bit]
         lever_on = 1;
@@ -410,16 +404,12 @@ void lever_output(void) {
         lever_allready_set = 1;
         lever_long_flag = lever1_long_time;
         lever_relais_flag = 1;  // Set the Relais via Flag
-        //OutLeverR = 1;
-        //OutLeverLed = 1;
     }
 
     if (lever_long_flag > 1) {                      // Decrement Lever Time / Lever sort Parts OK/NOK
         lever_long_flag = lever_long_flag - 1;
     } else {
         lever_relais_flag = 0;  // Reset the Relais via Flag
-        //OutLeverR = 0;
-        //OutLeverLed = 0;
     }
     
     if (count != count_old_lever) { //If next count -  lever to zero
@@ -440,8 +430,45 @@ void lever_man_auto(void) {
         } else {
             OutLeverR = 0;
             OutLeverLed = 0;
+
         }
 
+    }
+}
+
+void check_device(void) {
+    if (InDEV_R == 1) {
+        error_status = error_status | 0b00000001; // Set Error_bit 0 Dev NOT Ready
+    } else {
+        error_status = error_status & ~0b00000001; // Clear Error_bit 0
+    }
+
+    if (InDEV_F == 1) {
+        error_status = error_status | 0b00000010; // Set Error_bit 1 Dev faut
+    } else {
+        error_status = error_status & ~0b00000010; // Clear Error_bit 1
+    }
+
+}
+
+void show_alarm(void) {
+    if (error_status > 0) {
+        OutAlarm = 1;
+    } else {
+        OutAlarm = 0;
+    }
+
+}
+
+void show_hupe(void) {
+    if (InHupe == 1) {
+        if (error_status > 0) {
+            OutHupe = 1;
+        } else {
+            OutHupe = 0;
+        }
+    } else {
+        OutHupe = 0;
     }
 }
 
@@ -458,16 +485,21 @@ void main(void) {
     part = 0;
     part_bit = 5;
     count = 0;
+    error_status = 0b00000111;
     
 
 
     while (1) {
-        OutAlarm = 1;
+        OutAlarm = 0;
         SondeA = InSA; // Read Sonden
         SondeB = InSB;
         
         show_sonden(); // Show Sonden Input on LED  
         lever_man_auto(); // Lever Manual control
+        check_device(); // Send errror if Device not ready
+        show_alarm(); // Alarm LED on/off
+        show_hupe(); // Hupe on /off
+        
 
         t_plus(); // Puls SondeB länger
         output = SondeA & (~SondeB_long); // Fehlersignal logic
@@ -480,7 +512,7 @@ void main(void) {
         send_command();
         
         wait_timer1();  // __delay_ms(5); // loop Delay 
-        OutAlarm = 0;
+        OutAlarm = 1;
     }
 }
 
