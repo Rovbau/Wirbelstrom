@@ -117,7 +117,7 @@ char part_bit;
 char aktual;
 char lever_on, lever_long_flag, lever_relais_flag;
 char position;
-char commands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+char commands[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 char t_plus_time;
 char lever1_long_time;
 char lever_delay_time;
@@ -128,6 +128,7 @@ char Txdata[6];
 char daten;
 char send_actual_byte;
 char error_status;
+char hold_bit_for_safe, flag_safe_eject;
 
 
 void init(void) {
@@ -222,7 +223,7 @@ void __interrupt () my_isr_routine (void)  // In t e r r u p t r o u t i n e
         commands[position] = new_data; //new SerialByte to commands array
         position++;
 
-        if (position == 8) {
+        if (position == 9) {
             position = 0;
             new_data_ready = 1; //Read anzahl bytes then set new_data_ready flag
         }
@@ -273,12 +274,15 @@ void send_command(void) {
             break;
         case 9:
             int_to_str(error_status);
-            break;            
+            break;
         case 10:
+            int_to_str(flag_safe_eject);
+            break;
+        case 11:
             send_serial(10); //Send NEWLINE
             send_serial(13);
             break;
-        case 11:
+        case 12:
             send_actual_byte = 0;
             break;
         default:
@@ -286,6 +290,7 @@ void send_command(void) {
          
     }
 }
+
 
 void read_command(void) {
     if (new_data_ready == 1) {
@@ -297,8 +302,10 @@ void read_command(void) {
         part = commands[5];
         part_bit = commands[6];
         dumy3 = commands[7];
+        flag_safe_eject = commands[8];
         new_data_ready = 0;
         error_status = error_status & ~0b00000100; // Clear Error_bit 2 Config_stored 
+ 
     }
 
 }
@@ -369,6 +376,24 @@ void fill_shift_register(char output) {
     }
 }
 
+void save_eject(void) {
+    if (flag_safe_eject == 1) {
+        
+        if (shift_data[0] & 0x01) {
+            hold_bit_for_safe = 1;
+            }
+            
+        
+        if (shift_data[0] & 0x04) {                   // No more false_parts fill Bit0 
+            if (hold_bit_for_safe == 1) {
+                shift_data[0] = shift_data[0] | 0b00001110; // Fill FIFO Bit0 for safety eject 
+                hold_bit_for_safe = 0;
+                
+            }
+        }
+    }
+}
+
 void show_output(void) {
     if (output > 0) {
         OutNOK = 1;
@@ -383,12 +408,6 @@ void show_sonden(void) {
     } else {
         OutSA = 0;
     }
-    if (SondeB == 1) {
-        OutSB = 1;
-    } else {
-        OutSB = 0;
-    }
-
 }
 
 void lever_output(void) {
@@ -406,7 +425,7 @@ void lever_output(void) {
         lever_relais_flag = 1;  // Set the Relais via Flag
     }
 
-    if (lever_long_flag > 1) {                      // Decrement Lever Time / Lever sort Parts OK/NOK
+    if (lever_long_flag >= 1) {                      // Decrement Lever Time / Lever sort Parts OK/NOK
         lever_long_flag = lever_long_flag - 1;
     } else {
         lever_relais_flag = 0;  // Reset the Relais via Flag
@@ -436,14 +455,28 @@ void lever_man_auto(void) {
     }
 }
 
+void invert_sonden(void) {
+    if (InSA == 1) {    // Invert Sonde A
+        SondeA = 0;
+    } else {
+        SondeA = 1;
+    }
+
+    if (InSB == 1) {    // Invert Sonde A
+        SondeB = 0;
+    } else {
+        SondeB = 1;
+    }
+}
+
 void check_device(void) {
-    if (InDEV_R == 1) {
+    if (InDEV_R == 0) {
         error_status = error_status | 0b00000001; // Set Error_bit 0 Dev NOT Ready
     } else {
         error_status = error_status & ~0b00000001; // Clear Error_bit 0
     }
 
-    if (InDEV_F == 1) {
+    if (InDEV_F == 0) {
         error_status = error_status | 0b00000010; // Set Error_bit 1 Dev faut
     } else {
         error_status = error_status & ~0b00000010; // Clear Error_bit 1
@@ -490,10 +523,8 @@ void main(void) {
 
 
     while (1) {
-        OutAlarm = 0;
-        SondeA = InSA; // Read Sonden
-        SondeB = InSB;
-        
+        invert_sonden(); // Read Sonden
+   
         show_sonden(); // Show Sonden Input on LED  
         lever_man_auto(); // Lever Manual control
         check_device(); // Send errror if Device not ready
@@ -506,13 +537,13 @@ void main(void) {
         show_output(); //Show output NOK
         counter(); // Count Parts SondeB
         shift_register(); //Shift bytes
-        fill_shift_register(output); //Set shift_data[0] bit0   
+        fill_shift_register(output); //Set shift_data[0] bit0 
+        save_eject();               // Set bit before and after for safe_eject
         lever_output(); // If Bit in ShiftRegister is Set -> LeverON for time lever_long_time    
         read_command(); // Read Command from UART 
         send_command();
         
         wait_timer1();  // __delay_ms(5); // loop Delay 
-        OutAlarm = 1;
     }
 }
 

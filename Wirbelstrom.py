@@ -44,6 +44,7 @@ class Gui():
         self.entry_t_time.insert(0,"1")
         self.entry_t_lever.insert(0,"1")
         self.entry_t_lever_delay.insert(0,"1")
+        self.entry_t_lever_delay.config(state='disabled')
         self.entry_t_count.insert(0,"1")
         self.entry_part.insert(0,"1")
         self.entry_part_bit.insert(0,"1")
@@ -111,6 +112,8 @@ class Gui():
         self.label_input.place          (x = 100, y = 400)
 
         self.old_counts = 0
+        self.show_counts = 0
+        
         self.uart = Uart()
         self.uart.attach(Uart.EVT_CONNECTION_STATUS, self.connection_status_changed)
         self.uart.attach(Uart.EVT_DATA, self.data_received)
@@ -181,7 +184,7 @@ class Gui():
     def data_received(self, data):
         
         print("Data-In: "+ str(data))
-        if len(data) > 7:            
+        if len(data) > 8:            
             self.label_input.configure(text = data[1:-1])                               #Statustext Serial input
 
             if int(data[8]) & 0b00000001:                                                    #Status Dev_ready
@@ -204,14 +207,16 @@ class Gui():
             else:
                 self.label_picfault_status.configure( text = "True", fg= "darkgreen")
 
+            #data[9] is for save_eject
+
             actual_counts = int(data[4])                                                #Prevent Count from Overflow            
             if actual_counts < self.old_counts:                                         #Update Count label
-                actual_counts = actual_counts + self.old_counts
+                self.show_counts = self.show_counts + 256 + actual_counts
                 self.old_counts = actual_counts
-                self.label_counts.configure(text = str(actual_counts))
-            else:
+                self.label_counts.configure(text = str(self.show_counts))
+            else:              
                 self.old_counts = actual_counts
-                self.label_counts.configure(text = str(actual_counts))
+                self.label_counts.configure(text = str(self.show_counts + actual_counts))
 
             fifo_text = '{0:08b}'.format(int(data[7]))                                  #Update FIFO (reversed L-R)
             fifo_reversed = ''.join(reversed(fifo_text))
@@ -257,9 +262,13 @@ class Gui():
 
         data = data + self.text_to_char("0")        #Send error_status Null -> all OK
 
-        if chr(254) not in data:                    #Send when all inputs "okay" > 0
+        data = data + self.text_to_char("1")        #Send "1" if save_eject is ON / "0" if OFF
+
+        if chr(254) not in data:                    #Send when all inputs "okay" 
             print("Data-Out: " +str(data))          #Send data to COM
-            self.uart.send_commands(data)           
+            self.uart.send_commands(data)
+            self.show_counts = 0                    #Counter to Zero
+            self.old_counts = 0                     #Old Counter to Zero
         else:
             print("Fehler in User_Inputs")
             
