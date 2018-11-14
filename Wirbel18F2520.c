@@ -128,7 +128,7 @@ char Txdata[6];
 char daten;
 char send_actual_byte;
 char error_status;
-char hold_bit_for_safe, flag_safe_eject;
+char hold_bit_for_safe, flag_safe_eject, hold_allready_set, relase_allready_set;
 
 
 void init(void) {
@@ -333,6 +333,8 @@ void counter(void) {
         if (allready_set == 0) {
             count = count + 1;
             allready_set = 1;
+            hold_allready_set = 0;
+            relase_allready_set = 0;
         }
     } else {
         allready_set = 0;
@@ -380,14 +382,19 @@ void save_eject(void) {
     if (flag_safe_eject == 1) {
         
         if (shift_data[0] & 0x01) {
-            hold_bit_for_safe = 1;
+            if (hold_allready_set == 0){
+            hold_bit_for_safe = hold_bit_for_safe + 1;
+            hold_allready_set = 1;
             }
-            
+        }
         
         if (shift_data[0] & 0x04) {                   // No more false_parts fill Bit0 
-            if (hold_bit_for_safe == 1) {
+            if (hold_bit_for_safe >= 1) {
                 shift_data[0] = shift_data[0] | 0b00001110; // Fill FIFO Bit0 for safety eject 
-                hold_bit_for_safe = 0;
+                if (relase_allready_set == 0){
+                    hold_bit_for_safe = hold_bit_for_safe - 1;
+                    relase_allready_set = 1;
+                }
                 
             }
         }

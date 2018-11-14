@@ -54,7 +54,9 @@ class Gui():
         self.label_t_lever_delay =   Label(root, text="Lever_Delay_time")
         self.label_t_count =         Label(root, text="count")
         self.label_part =            Label(root, text="Parts")
-        self.label_com_ok =          Label(root, text="False", relief = GROOVE, fg = "red")
+        self.label_eject =            Label(root, text="Safe Eject")
+        self.eject_state = IntVar()
+        self.radiobutton_eject =     Checkbutton(root, text = "ON", variable = self.eject_state)
 
         self.label_com =             Label(root, text="SCHNITTSTELLEN Status")
         self.label_dev_ok =          Label(root, text="ELOTEST Bereit")  
@@ -84,6 +86,7 @@ class Gui():
         self.label_t_lever_delay.place   (x= 100, y = 200)
         self.label_t_count.place         (x= 100, y = 250)
         self.label_part.place            (x= 100, y = 300)
+        self.label_eject.place           (x= 100, y = 350)
 
         self.label_com.place            (x= 650, y = 100)  
         self.label_dev_ok.place         (x= 650, y = 150)    
@@ -103,13 +106,15 @@ class Gui():
         self.entry_t_count.place        (x= 250, y = 250)
         self.entry_part.place           (x= 250, y = 300)
 
-        self.button_send.place          (x = 100, y = 350)
+        self.radiobutton_eject.place    (x= 250, y = 350)
+
+        self.button_send.place          (x = 100, y = 400)
         
         self.label_count.place          (x = 650, y = 400)
         self.label_counts.place         (x = 850, y = 400)
         self.label_shift.place          (x = 650, y = 450)
         self.label_input_shift.place    (x = 850, y = 450)
-        self.label_input.place          (x = 100, y = 400)
+        self.label_input.place          (x = 100, y = 450)
 
         self.old_counts = 0
         self.show_counts = 0
@@ -232,6 +237,7 @@ class Gui():
             part_bit  = int(text) % 8           
             return(str(part_byte), str(part_bit))
         
+        
     def get_gui_command(self,x,y):
         """Read Str vom Entry's and send data to COM"""
         
@@ -261,8 +267,9 @@ class Gui():
         data = data + self.text_to_char(part_bit)
 
         data = data + self.text_to_char("0")        #Send error_status Null -> all OK
-
-        data = data + self.text_to_char("1")        #Send "1" if save_eject is ON / "0" if OFF
+       
+        status_eject = str(self.eject_state.get())       #Send Eject state 1->ON 0->OFF
+        data = data + self.text_to_char(status_eject)        
 
         if chr(254) not in data:                    #Send when all inputs "okay" 
             print("Data-Out: " +str(data))          #Send data to COM
