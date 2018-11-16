@@ -122,6 +122,10 @@ class Gui():
         self.uart = Uart()
         self.uart.attach(Uart.EVT_CONNECTION_STATUS, self.connection_status_changed)
         self.uart.attach(Uart.EVT_DATA, self.data_received)
+        self.uart.attach(Uart.EVT_CONNECTION_INTERRUPTED, self.connection_interrupted)
+
+        self.root.bind("<<CONNECTION_INTERRUPTED>>", self.show_connection_interrupted)
+        
         
     def cleanup(self):
         """Close UART and Close GUI"""
@@ -227,6 +231,12 @@ class Gui():
             fifo_reversed = ''.join(reversed(fifo_text))
             self.label_input_shift.configure(text = fifo_reversed)
 
+    def connection_interrupted(self, _):
+        self.root.event_generate("<<CONNECTION_INTERRUPTED>>", when='tail')
+
+    def show_connection_interrupted(self, event = None):
+        tkMessageBox.showerror(title="Error",message="Verbindung unterbrochen",parent=self.root)
+
     def get_part(self, text):
         """Read Str from Parts-Entry and generate Byte+Bit for uP / Part maximal 100"""
         if int(text) > 100:
@@ -296,24 +306,18 @@ class Gui():
 
 if __name__ == "__main__":
 
-    root=Tk()
-    gui = Gui(root)
-    atexit.register(gui.cleanup)
-    root.mainloop()
+    try:
+        logging.basicConfig(filename='Err_Log_wirbelstrom.log',
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        level=logging.ERROR,
+                        datefmt='%Y-%m-%d %H:%M:%S')
+        root=Tk()
+        gui = Gui(root)
+        atexit.register(gui.cleanup)
+        root.mainloop()
+    except:
+        logging.exception("Wir sind mit Pauken und Trompeten untergegangen :)")
 
-####    logging.basicConfig(filename='Err_Log_wirbelstrom.log',
-####                        format='%(asctime)s %(levelname)-8s %(message)s',
-####                        level=logging.ERROR,
-####                        datefmt='%Y-%m-%d %H:%M:%S')
-##
-##    try:    
-##        root=Tk()
-##        gui = Gui(root)
-##        atexit.register(gui.cleanup)    
-##        root.protocol("WM_DELETE_WINDOW", gui.cleanup)            
-##        root.mainloop()
-##    except:
-##        logging.exception("Main Failed")
-##        print("Fatal Error, Closing App")
+
 
 

@@ -3,12 +3,13 @@ import time
 from threading import *
 import atexit
 import sys
-
+import logging
 
 class Uart():
 
     EVT_CONNECTION_STATUS = 'EVT_CONNECTION_STATUS'
     EVT_DATA = 'EVT_DATA'
+    EVT_CONNECTION_INTERRUPTED = 'EVT_CONNECTION_INTERRUPTED'
     
     def __init__(self):
         self.connected = False
@@ -71,6 +72,8 @@ class Uart():
                     self._notifyObservers(Uart.EVT_DATA, data[:])
             except:
                 self.setConnectionStatus(False)
+                self._notifyObservers(Uart.EVT_CONNECTION_INTERRUPTED, None)
+                logging.exception("Connection to Reddy interrupted")
                 print(sys.exc_info()[0])
             time.sleep(0.5)
         self.readingThreadRunning = False
