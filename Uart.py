@@ -60,21 +60,28 @@ class Uart():
     def reading(self):
         self.readingThreadRunning = True
         self.stopReading = False
-        self.data_from_pic = ""
+        data_from_pic = ""
+        noDataReceivedCounter = 0
         
         while not self.stopReading and self.connected:
             try:
                 while self.ser.inWaiting() > 50:
-                    self.data_from_pic = self.ser.readline()
-                data = self.data_from_pic.split(",")
+                    data_from_pic = self.ser.readline()
+                data = data_from_pic.split(",")
+                data_from_pic = ""
                 if data[0] == "\r255":
+                    noDataReceivedCounter = 0
                     print("Notify observers for EVT_DATA: " + str(data))
                     self._notifyObservers(Uart.EVT_DATA, data[:])
+                else:
+                    noDataReceivedCounter += 1
+                if noDataReceivedCounter > 10:
+                    raise Exception("No data received for at least 5 seconds; Aborting connection")
             except:
                 self.setConnectionStatus(False)
+                self.closeSerInternal()
                 self._notifyObservers(Uart.EVT_CONNECTION_INTERRUPTED, None)
                 logging.exception("Connection to Reddy interrupted")
-                print(sys.exc_info()[0])
             time.sleep(0.5)
         self.readingThreadRunning = False
 
@@ -82,13 +89,17 @@ class Uart():
         self.stopReading = True
         while self.readingThreadRunning:
             pass
-        
+
+        self.closeSerInternal()
+        self.setConnectionStatus(False)
+
+    def closeSerInternal(self):
         try:
             self.ser.close()
-            self.setConnectionStatus(False)
-            print("Close COM")
-        except Exception as e:
-            print("Could not close COM " + str(e))
+            logging.info("Close COM")
+        except:
+            logging.exception("Could not close COM")
+
      
 if __name__ == "__main__":
    
