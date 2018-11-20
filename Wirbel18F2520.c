@@ -1,45 +1,48 @@
 /*
- * File:   Wirbelstrom.c
+ * File:   Wirbel18F2520.c
  * Author: Michael
- * Programm: Programm verwendet zwei Sonden auszuwerten
- * Outputs werden um XX ms verlängert
- * Output ist ON wenn SondeA == 1 and NICHT(SondeB)
+ * Programm: Wirbelstromauswetung mit FIFO
+ * 
+ * Inputs:
+ * Erwartet config an UART char(255)char(t_plus_time)char(lever1_long_time)....
+ * Wertet die Signale von Sonde InSA und InSB aus. liest den Fehlerzustand InDEFx der übergeordneteten Steuerung ELOSTEST PL600
+ * Verländert das Signal von SondeB um t_plus_time[ms*10]
+ * Schift FIFO shift_data left wenn count an InSB detektiert
+ * Schreibt "1" in FIFO -> wenn Output == ( SondeA == 1 and NICHT SondeB)
+ * Funktion Save_eject, aktiv wenn flag_safe_eject == 1: Setzt bit1+bit3 in FIFO shift_data[0] wenn Output == 1 zum sicherern Auswerfen der Teile Vorher/Nacher
+ * 
+ * Outputs:
+ * Setzt OutLeverR = Auswerfer wenn in FIFO an Position welche mit part und part_bit festgelegt wurde gesetzt ist. Position entspricht shift_data[part[part_bit]]
+ * Setzt OutLeverR für die zeit von lever1_long_time[ms*10]
+ * Setzt Hupe, Alarm LED, Relais OutSteuerungStop wenn Elotest nicht bereit, wenn UART error erkannt, wenn Timer1 overflow, wenn config noch nicht erhalten
+ * Setzt LED für SondeA, SondeB, NOK 
+ * 
+ * Looptime:
+ * Timer1 generiert eine looptime von ca. 9ms
+ * 
  * Created on 10. Sep 2018
- */
-/* PIN BELEGUNG
+ * Modified on 20. Nov 2018 
  * 
- RB0 = Auswerfer
- RB1 = RX
- RB2 = TX
- RB3 = Sonde A 
- RB4 = Sonde B 
- RB5 = B out long
- RB6 = Counter
- RB7 = Serial Infos
- * 
- RA0 = Out Error
- RA1 = 
- RA2 = 
- RA3 = 
- 
- */
-#define InDEV_F PORTAbits.RA2
-#define InDEV_R PORTAbits.RA3
-#define InSB    PORTAbits.RA4
-#define InSA    PORTAbits.RA5
-
-#define OutSteuerS  LATBbits.LATB0 
-#define OutLeverR   LATBbits.LATB1 
-#define OutHupe     LATBbits.LATB2
-#define OutAlarm    LATBbits.LATB3
-#define OutLeverLed LATBbits.LATB4
-#define OutNOK      LATBbits.LATB5
-#define OutSB       LATBbits.LATB6
-#define OutSA       LATBbits.LATB7
+ *  */
 
 
-#define InHupe      PORTCbits.RC0
-#define InLeverTest PORTCbits.RC1
+#define InDEV_F PORTAbits.RA2   //Elotest status Fehler
+#define InDEV_R PORTAbits.RA3   //Elotest status Bereit
+#define InSB    PORTAbits.RA4   //Elotest SondeA Kanal-1 alarm
+#define InSA    PORTAbits.RA5   //Elotest SondeB Kanal-2 alarm
+
+#define OutSteuerS  LATBbits.LATB0      //Relais Steuerung Halt/Störung
+#define OutLeverR   LATBbits.LATB1      //Auswerfer 
+#define OutHupe     LATBbits.LATB2      //Hupe Summer
+#define OutAlarm    LATBbits.LATB3      //LED Rot Alarm
+#define OutLeverLed LATBbits.LATB4      //LED Grün Auswerfer ON
+#define OutNOK      LATBbits.LATB5      //LED Rot fehlerhaftes Bauteil
+#define OutSB       LATBbits.LATB6      //LED grün SondeB status 
+#define OutSA       LATBbits.LATB7      //LED grün SondeA status
+
+
+#define InHupe      PORTCbits.RC0       //Schalter Hupe ON/OFF
+#define InLeverTest PORTCbits.RC1       //Taste Auswerfer ON
 
 // CONFIG1H
 #pragma config OSC = INTIO7      // Oscillator Selection bits (INTOSC 1Mhz Standart)
@@ -100,7 +103,7 @@
 #include <xc.h>
 #include <stdlib.h>
 #include <pic18f2520.h>
-#define _XTAL_FREQ 8000000
+#define _XTAL_FREQ 4000000
 
 
 char SondeA, SondeB;
@@ -121,6 +124,7 @@ char commands[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 char t_plus_time;
 char lever1_long_time;
 char lever_delay_time;
+char time_NOK;
 char lever_allready_set;
 char dumy1, dumy3;
 char new_data_ready;
@@ -132,13 +136,13 @@ char hold_bit_for_safe, flag_safe_eject, hold_allready_set, relase_allready_set;
 
 
 void init(void) {
-    nRBPU = 1; //Disable (1) PORTB internal pull up resistors
-    OSCCON = 0b01100000;  // Set to 4Mhz intern Clock
-    ADCON1 = 0b00001111; // A/D off
-    TRISA =  0b11111111; //PORTA as out/in
-    TRISB =  0b00000000; //PORTB as out/In
-    TRISC =  0b11111111; //PORTC
-    PORTA =  0x00; //All OFF
+    nRBPU = 1;              //Disable (1) PORTB internal pull up resistors
+    OSCCON = 0b01100000;    // Set to 4Mhz intern Clock
+    ADCON1 = 0b00001111;    // A/D off
+    TRISA =  0b11111111;    //PORTA as out/in
+    TRISB =  0b00000000;    //PORTB as out/In
+    TRISC =  0b11111111;    //PORTC
+    PORTA =  0x00;          //All OFF
     PORTB =  0x00;
     PORTC =  0x00;
     
@@ -163,7 +167,7 @@ void wait_timer1(void) {
             
     while (PIR1bits.TMR1IF == 0) {
     }
-    TMR1H = 220;
+    TMR1H = 220;                                //Setze Timer1 auf 9ms @ 4Mhz
     TMR1L = 0;
     TMR1IF = 0;
 }
@@ -187,6 +191,7 @@ void send_serial(char databyte) {
 }
 
 void int_to_str(char daten) {
+    //Sende 3xDigit und "Komma" 
     Txdata[0] = 0;
     Txdata[1] = 0;
     Txdata[2] = 0;
@@ -244,7 +249,7 @@ void __interrupt () my_isr_routine (void)  // In t e r r u p t r o u t i n e
 }
 
 void send_command(void) {
-    
+    //Send data only one byte per function call
     send_actual_byte = send_actual_byte + 1;
 
     switch (send_actual_byte) {
@@ -293,6 +298,7 @@ void send_command(void) {
 
 
 void read_command(void) {
+    //Read data from commands and update variables and error_status[2]
     if (new_data_ready == 1) {
         dumy1 = commands[0];
         t_plus_time = commands[1];
@@ -304,13 +310,14 @@ void read_command(void) {
         dumy3 = commands[7];
         flag_safe_eject = commands[8];
         new_data_ready = 0;
-        error_status = error_status & ~0b00000100; // Clear Error_bit 2 Config_stored 
+        error_status = error_status & ~0b00000100; // Clear Error_bit 2 >> Config_stored 
  
     }
 
 }
 
 void t_plus(void) {
+    //Signal on SondeB longer for time t_plus_time
     if (SondeB == 1) {
         out_long = t_plus_time;
         OutSB = 1;
@@ -329,6 +336,7 @@ void t_plus(void) {
 }
 
 void counter(void) {
+    //Counter if SondeB from zero to one
     if (SondeB == 1) {
         if (allready_set == 0) {
             count = count + 1;
@@ -343,6 +351,7 @@ void counter(void) {
 }
 
 void shift_register(void) {
+    //For any count pulse / Shift data in Schift_data left one bit
     char i;
     if (count != count_old) {
         for (i = sizeof (shift_data); i-- > 0;) { //Shift left 1bit for sizeof-array "shift_data"
@@ -353,21 +362,10 @@ void shift_register(void) {
         count_old = count;
     }
 }
-//Shift data left 1bit  
-//    if (count != count_old){    
-//        shift_data[3] <<= 1;
-//        if(shift_data[2] & 0x80)
-//            shift_data[3] |= 1;
-//        shift_data[2] <<= 1;
-//        if(shift_data[1] & 0x80)
-//            shift_data[2] |= 1;
-//        shift_data[1] <<= 1;   
-//        if(shift_data[0] & 0x80)
-//            shift_data[1] |= 1;
-//        shift_data[0] <<= 1;  
-//    count_old = count;
+
 
 void fill_shift_register(char output) {
+    //If false Part detected set FIFO schift_data[0,0]
     if (output != 0) {
         if (out_allready == 0) {
             shift_data[0] = shift_data[0] | (1 << 0); //Set bit Null
@@ -379,6 +377,7 @@ void fill_shift_register(char output) {
 }
 
 void save_eject(void) {
+    //Save_eject sets bit1+bit3 in FIFO for a more secure detection of false Parts
     if (flag_safe_eject == 1) {
         
         if (shift_data[0] & 0x01) {
@@ -402,14 +401,23 @@ void save_eject(void) {
 }
 
 void show_output(void) {
+    //Set LED if false Part detected 
     if (output > 0) {
+        time_NOK = 5;
         OutNOK = 1;
     } else {
-        OutNOK = 0;
+        time_NOK = time_NOK - 1;
+        if (time_NOK < 1) {
+            OutNOK = 0;
+            time_NOK = 1;
+        }
+
+
     }
 }
 
 void show_sonden(void) {
+    //Set LED if SondeA is On
     if (SondeA == 1) {
         OutSA = 1;
     } else {
@@ -418,6 +426,7 @@ void show_sonden(void) {
 }
 
 void lever_output(void) {
+    //If bit on specific Position in FIFI is set (part, part_bit) lever is ON for time lever_long_time
     if (((1 << part_bit) & shift_data[part]) != 0) { //Check Schiftregister [Byte = part][Bit = part_bit]
         lever_on = 1;
     }
@@ -446,6 +455,7 @@ void lever_output(void) {
 }
 
 void lever_man_auto(void) {
+    //Switch between Automatic and manual if button is pressed
     if (InLeverTest == 0) {
         OutLeverR = 1;
         OutLeverLed = 1;
@@ -477,6 +487,7 @@ void invert_sonden(void) {
 }
 
 void check_device(void) {
+    //Check status of Elotes PL 600 
     if (InDEV_R == 0) {
         error_status = error_status | 0b00000001; // Set Error_bit 0 Dev NOT Ready
     } else {
@@ -493,9 +504,11 @@ void check_device(void) {
 
 void show_alarm(void) {
     if (error_status > 0) {
+        OutSteuerS = 0;
         OutAlarm = 1;
     } else {
         OutAlarm = 0;
+        OutSteuerS = 1;
     }
 
 }
@@ -520,8 +533,8 @@ void main(void) {
     init_timer1();
     init_serial();
 
-    t_plus_time = 20; //Variable Init
-    lever1_long_time = 20;
+    t_plus_time = 1; //Variable Init
+    lever1_long_time = 2;
     part = 0;
     part_bit = 5;
     count = 0;
@@ -530,27 +543,27 @@ void main(void) {
 
 
     while (1) {
-        invert_sonden(); // Read Sonden
+        invert_sonden();                // Read Sonden
    
-        show_sonden(); // Show Sonden Input on LED  
-        lever_man_auto(); // Lever Manual control
-        check_device(); // Send errror if Device not ready
-        show_alarm(); // Alarm LED on/off
-        show_hupe(); // Hupe on /off
+        show_sonden();                  // Show Sonden Input on LED  
+        lever_man_auto();               // Lever Manual control
+        check_device();                 // Send errror if Device not ready
+        show_alarm();                   // Alarm LED on/off
+        show_hupe();                    // Hupe on /off
         
 
-        t_plus(); // Puls SondeB länger
+        t_plus();                       // Puls SondeB länger
         output = SondeA & (~SondeB_long); // Fehlersignal logic
-        show_output(); //Show output NOK
-        counter(); // Count Parts SondeB
-        shift_register(); //Shift bytes
-        fill_shift_register(output); //Set shift_data[0] bit0 
-        save_eject();               // Set bit before and after for safe_eject
-        lever_output(); // If Bit in ShiftRegister is Set -> LeverON for time lever_long_time    
-        read_command(); // Read Command from UART 
+        show_output();                  //Show output NOK
+        counter();                      // Count Parts SondeB
+        shift_register();               //Shift bytes
+        fill_shift_register(output);    //Set shift_data[0] bit0 
+        save_eject();                   // Set bit before and after for safe_eject
+        lever_output();                 // If Bit in ShiftRegister is Set -> LeverON for time lever_long_time    
+        read_command();                 // Read Command from UART 
         send_command();
         
-        wait_timer1();  // __delay_ms(5); // loop Delay 
+        wait_timer1();                  // __delay_ms(9); // loop Delay 
     }
 }
 
