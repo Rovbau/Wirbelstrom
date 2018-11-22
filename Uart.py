@@ -71,7 +71,6 @@ class Uart():
                 data_from_pic = ""
                 if data[0] == "\r255":
                     noDataReceivedCounter = 0
-                    print("Notify observers for EVT_DATA: " + str(data))
                     self._notifyObservers(Uart.EVT_DATA, data[:])
                 else:
                     noDataReceivedCounter += 1

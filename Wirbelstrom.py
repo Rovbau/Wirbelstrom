@@ -153,7 +153,7 @@ class Gui():
             
     def connect(self):
         """Connect to COM Port"""
-        self.uart.open_uart("COM4",9600)
+        self.uart.open_uart("COM1",9600)
 
     def disconnect(self):
         self.uart.close()
